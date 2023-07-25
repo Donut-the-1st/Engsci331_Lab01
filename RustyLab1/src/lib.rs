@@ -1,21 +1,37 @@
 extern crate blas_src;
 
+use ndarray::ViewRepr;
+use ndarray_linalg::Norm;
 use ndarray_rand::rand_distr::Uniform;
+use ndarray_rand::RandomExt;
 use numpy::ndarray::prelude::*;
 use numpy::*;
 use numpy::{IntoPyArray, PyArray};
-use ndarray_rand::RandomExt;
 use pyo3::prelude::*;
-use ndarray_linalg::Norm;
 
-fn rs_argmax(vector: &Array<f64, Ix1>) -> usize {
-    let mut argmax:usize = 0;
+fn rs_argmax(vector: ArrayBase<ViewRepr<&f64>, Ix1>) -> usize {
+    let mut argmax: usize = 0;
     for i in 0..vector.len() {
         if vector[i].abs() > vector[argmax].abs() {
             argmax = i;
         };
     }
-    return argmax
+    return argmax;
+}
+
+#[pyfunction]
+fn argmax<'a>(py: Python<'a>, vector: PyReadonlyArray1<f64>) -> usize {
+    let vector = vector.as_array();
+    return rs_argmax(ArrayView::from(vector));
+}
+
+#[pyfunction]
+fn matmul<'a>(
+    py: Python<'a>,
+    array_a: PyReadonlyArray2<f64>,
+    array_b: PyReadonlyArray2<f64>,
+) -> &'a PyArray<f64, Ix2> {
+    return (array_a.as_array().dot(&(array_b.as_array()))).into_pyarray(py);
 }
 
 /// Formats the sum of two numbers as string.
@@ -37,7 +53,7 @@ fn power<'a>(
         t_vector = array_A.dot(&eigenvector);
 
         /* find argmax */
-        argmax = rs_argmax(&t_vector);
+        argmax = rs_argmax(ArrayView::from(&t_vector));
 
         eigenvalue = t_vector.norm_l2();
         eigenvector = t_vector / eigenvalue;
@@ -59,5 +75,7 @@ fn power<'a>(
 #[pymodule]
 fn RustyLab1(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(power, m)?)?;
+    m.add_function(wrap_pyfunction!(matmul, m)?)?;
+    m.add_function(wrap_pyfunction!(argmax, m)?)?;
     Ok(())
 }
