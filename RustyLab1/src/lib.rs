@@ -8,6 +8,15 @@ use ndarray_rand::RandomExt;
 use pyo3::prelude::*;
 use ndarray_linalg::Norm;
 
+fn rs_argmax(vector: &Array<f64, Ix1>) -> usize {
+    let mut argmax:usize = 0;
+    for i in 0..vector.len() {
+        if vector[i].abs() > vector[argmax].abs() {
+            argmax = i;
+        };
+    }
+    return argmax
+}
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
@@ -28,11 +37,7 @@ fn power<'a>(
         t_vector = array_A.dot(&eigenvector);
 
         /* find argmax */
-        for i in 0..t_vector.len() {
-            if t_vector[i].abs() > t_vector[argmax].abs() {
-                argmax = i
-            };
-        }
+        argmax = rs_argmax(&t_vector);
 
         eigenvalue = t_vector.norm_l2();
         eigenvector = t_vector / eigenvalue;

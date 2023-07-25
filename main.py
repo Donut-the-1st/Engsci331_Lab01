@@ -2,7 +2,11 @@ from typing import Tuple
 
 import numpy as np
 
-
+try:
+    import RustyLab1
+    RustyLab1_found = True
+except:
+    RustyLab1_found = False
 def power(A: np.ndarray, tol: float) -> Tuple[np.ndarray, float]:
     s = np.random.random(
         size=A.shape[1]
@@ -26,6 +30,9 @@ def power(A: np.ndarray, tol: float) -> Tuple[np.ndarray, float]:
 
     return s, eigenvalue
 
+
 if __name__ == '__main__':
     A = np.array([[2., -1.], [-1., 2.]])
     print(power(A, 1e-6))
+    if RustyLab1_found:
+        print(RustyLab1.power(A, 1e-6))
