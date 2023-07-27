@@ -1,7 +1,7 @@
 #![feature(iter_collect_into)]
 extern crate blas_src;
 
-use ndarray::{ViewRepr};
+use ndarray::{OwnedRepr, ViewRepr};
 use ndarray_linalg::Norm;
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
@@ -50,17 +50,40 @@ fn matmul<'a>(
     return (array_a.as_array().dot(&(array_b.as_array()))).into_pyarray(py);
 }
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn power<'a>(
-    py: Python<'a>,
-    array_A: PyReadonlyArray2<f64>,
-    tolerance: f64,
-) -> (&'a PyArray<f64, Ix1>, f64) {
-    let array_A = array_A.as_array();
+fn power_sml_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix1>, f64) {
+    let mut eigenvector = Array::random(array_A.nrows(), Uniform::new(0.0, 1.0));
     let mut eigenvalue = 0.0;
     let mut old_eigenvalue = 0.0;
+    let mut t_vector: Array<f64, Ix1>;
+    let mut is_converged = false;
+    let mut argmax: usize = 0;
+
+    while !is_converged {
+        t_vector = array_A.dot(&eigenvector);
+
+        /* find argmax */
+        argmax = rs_argmax(ArrayView::from(&t_vector));
+
+        eigenvalue = t_vector.norm_l2();
+        eigenvector = t_vector / eigenvalue;
+        if (old_eigenvalue - eigenvalue).abs() / eigenvalue.abs() > tolerance {
+            old_eigenvalue = eigenvalue;
+        } else {
+            is_converged = true;
+        }
+    }
+
+    if array_A.dot(&eigenvector)[argmax] / eigenvector[argmax] < 0.0 {
+        eigenvalue = eigenvalue * -1.0;
+    }
+
+    return (eigenvector, eigenvalue)
+}
+
+fn power_lrg_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix1>, f64) {
     let mut eigenvector = Array::random(array_A.nrows(), Uniform::new(0.0, 1.0));
+    let mut eigenvalue = 0.0;
+    let mut old_eigenvalue = 0.0;
     let mut t_vector: Array<f64, Ix1>;
     let mut is_converged = false;
     let mut argmax: usize = 0;
@@ -81,7 +104,27 @@ fn power<'a>(
     }
 
     if par_mat_vec_mul(&array_A, &eigenvector)[argmax] / eigenvector[argmax] < 0.0 {
-        eigenvalue = eigenvalue * -1.0
+        eigenvalue = eigenvalue * -1.0;
+    }
+
+    return (eigenvector, eigenvalue)
+}
+
+/// Formats the sum of two numbers as string.
+#[pyfunction]
+fn power<'a>(
+    py: Python<'a>,
+    array_A: PyReadonlyArray2<f64>,
+    tolerance: f64,
+) -> (&'a PyArray<f64, Ix1>, f64) {
+    let array_A = array_A.as_array();
+    let mut eigenvalue: f64 = 0.0;
+    let mut eigenvector: Array<f64, Ix1> = Array::zeros(array_A.nrows());
+
+    if eigenvector.len() < 200 {
+        (eigenvector, eigenvalue) = power_sml_mat(array_A, tolerance);
+    } else {
+        (eigenvector, eigenvalue) = power_lrg_mat(array_A, tolerance);
     }
 
     return (eigenvector.into_pyarray(py), eigenvalue);
