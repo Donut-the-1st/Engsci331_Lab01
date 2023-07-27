@@ -1,6 +1,7 @@
+#![feature(iter_collect_into)]
 extern crate blas_src;
 
-use ndarray::ViewRepr;
+use ndarray::{ViewRepr};
 use ndarray_linalg::Norm;
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
@@ -8,6 +9,21 @@ use numpy::ndarray::prelude::*;
 use numpy::*;
 use numpy::{IntoPyArray, PyArray};
 use pyo3::prelude::*;
+use ndarray::parallel::prelude::*;
+
+
+fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) -> Array<f64, Ix1> {
+    let mut vector_b : Vec<f64> = Vec::with_capacity(vector_x.len());
+
+    array_a.axis_iter(Axis(0))
+        .into_par_iter()
+        .map(|row| row.dot(vector_x))
+        .collect_into_vec(&mut vector_b);
+
+    let vector_b = Array::from_vec(vector_b);
+    return vector_b
+}
+
 
 fn rs_argmax(vector: ArrayBase<ViewRepr<&f64>, Ix1>) -> usize {
     let mut argmax: usize = 0;
@@ -20,7 +36,7 @@ fn rs_argmax(vector: ArrayBase<ViewRepr<&f64>, Ix1>) -> usize {
 }
 
 #[pyfunction]
-fn argmax<'a>(py: Python<'a>, vector: PyReadonlyArray1<f64>) -> usize {
+fn argmax(vector: PyReadonlyArray1<f64>) -> usize {
     let vector = vector.as_array();
     return rs_argmax(ArrayView::from(vector));
 }
@@ -50,7 +66,7 @@ fn power<'a>(
     let mut argmax: usize = 0;
 
     while !is_converged {
-        t_vector = array_A.dot(&eigenvector);
+        t_vector = par_mat_vec_mul(&array_A, &eigenvector);
 
         /* find argmax */
         argmax = rs_argmax(ArrayView::from(&t_vector));
@@ -64,7 +80,7 @@ fn power<'a>(
         }
     }
 
-    if array_A.dot(&eigenvector)[argmax] / eigenvector[argmax] < 0.0 {
+    if par_mat_vec_mul(&array_A, &eigenvector)[argmax] / eigenvector[argmax] < 0.0 {
         eigenvalue = eigenvalue * -1.0
     }
 
