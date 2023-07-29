@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, List
 
 import numpy as np
 
@@ -7,6 +7,8 @@ try:
     RustyLab1_found = True
 except:
     RustyLab1_found = False
+
+
 def power(A: np.ndarray, tol: float) -> Tuple[np.ndarray, float]:
     s = np.random.random(
         size=A.shape[1]
@@ -17,9 +19,13 @@ def power(A: np.ndarray, tol: float) -> Tuple[np.ndarray, float]:
     converged = False
     while not converged:
         t = np.matmul(A, s)
-        i = np.argmax(t)
-        eigenvalue = np.linalg.norm(t)
-        s = t / abs(eigenvalue)
+        i = max(
+            np.argmax(t),
+            np.argmin(t),
+            key=abs
+        )
+        eigenvalue = abs(np.linalg.norm(t))
+        s = t / eigenvalue
         if abs(eigenvalue - old_eigenvalue) / abs(eigenvalue) > tol:
             old_eigenvalue = eigenvalue
         else:
@@ -31,8 +37,61 @@ def power(A: np.ndarray, tol: float) -> Tuple[np.ndarray, float]:
     return s, eigenvalue
 
 
+def deflate(A: np.ndarray, eigenvector: np.ndarray, eigenvalue: float) -> np.ndarray:
+    return A - eigenvalue * np.matmul(eigenvector[np.newaxis].T, eigenvector[np.newaxis])
+
+
+def power_w_deflate(A: np.ndarray, tol: float) -> List[Tuple[np.ndarray, float]]:
+    eigenpairs = []
+    for i in range(A.shape[1]):
+        eigenpairs.append(power(A, tol))
+        A = deflate(A, *eigenpairs[i])
+
+    return eigenpairs
+
+
+def spring_system_init(K: np.ndarray) -> np.ndarray:
+    system = np.diag(K)
+    system_diag = np.diag(-K[1:None])
+    system[1:None, 0:-1] = system[1:None, 0:-1] + system_diag
+    system[0:-1, 1:None] = system[0:-1, 1:None] + system_diag
+    system[0:-1, 0:-1] = system[0:-1, 0:-1] - system_diag
+    return system
+
+
 if __name__ == '__main__':
-    A = np.array([[2., -1.], [-1., 2.]])
-    print(power(A, 1e-6))
-    if RustyLab1_found:
-        print(RustyLab1.power(A, 1e-6))
+    from matplotlib import pyplot as plt
+    spring_sys = spring_system_init(np.ones(10))
+    eig_pairs = power_w_deflate(spring_sys, 1e-6)
+    nat_freq = [pair[1]**0.5 / 2*np.pi for pair in eig_pairs]
+
+    plt.title("Eigenvalue vs Eigenvalue Index")
+    plt.xlabel("Eigenvalue Index")
+    plt.ylabel("Natural Frequency")
+    plt.plot(nat_freq)
+    plt.xticks(range(0,10))
+    plt.show()
+
+    plt.figure()
+    fig, axs = plt.subplots(5,2)
+    fig.suptitle("Eigenvector Value vs Eigenvector Value Index")
+    for ax in axs.flat:
+        ax.set(
+            xlabel='Eigenvector Value Index'
+        )
+        ax.set_xticks(
+            range(0, 10)
+        )
+
+    for i in range(0,5):
+        axs[i, 0].plot(range(0, 10), eig_pairs[i][0])
+
+    for i in range(0,5):
+        axs[i, 1].plot(range(0, 10), eig_pairs[i+5][0])
+
+    axs[2, 0].set(
+        ylabel='Eigenvector Value'
+    )
+
+    plt.show()
+
