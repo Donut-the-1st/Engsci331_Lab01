@@ -70,7 +70,13 @@ if __name__ == '__main__':
     plt.ylabel("Natural Frequency")
     plt.plot(nat_freq)
     plt.xticks(range(0,10))
-    plt.show()
+
+    plt.figure()
+    plt.title("Eigenvector Value vs Eigenvector Value Index")
+    plt.xlabel('Eigenvector Value Index')
+    plt.ylabel('Eigenvector Value')
+    [plt.plot(pair[0]) for pair in eig_pairs]
+    plt.legend(range(10))
 
     plt.figure()
     fig, axs = plt.subplots(5,2)
@@ -93,5 +99,36 @@ if __name__ == '__main__':
         ylabel='Eigenvector Value'
     )
 
-    plt.show()
+    # Question 3
+    eig_val, eig_vec = np.linalg.eig(spring_sys)
+    order = np.flip(eig_val.argsort())
+    eig_val = eig_val[order]
+    eig_val = [val**0.5 / 2*np.pi for val in eig_val]
+    eig_vec = eig_vec[order]
 
+    tolerances = np.logspace(-8, -2, num=4)
+    solutions = [power_w_deflate(spring_sys, tol) for tol in tolerances]
+
+    plt.figure()
+    plt.title("Natural Frequencies vs Tolerance")
+    plt.xlabel('Eigenvalue Index')
+    plt.ylabel('Natural Frequencies')
+    for sol in solutions:
+        nat_freq = [pair[1]**0.5 / 2*np.pi for pair in eig_pairs]
+        plt.plot(nat_freq)
+    plt.plot(eig_val)
+
+    plt.figure()
+    plt.title("Natural Frequency Errors vs Tolerance")
+    plt.xlabel('Eigenvalue Index')
+    plt.ylabel('Error')
+    for sol in solutions:
+        nat_freq = [pair[1] ** 0.5 / 2 * np.pi for pair in sol]
+        for i in range(10):
+            nat_freq[i] = (nat_freq[i] - (eig_val[i])) / eig_val[i]
+
+        plt.plot(nat_freq)
+    plt.legend(np.logspace(-8, -2, num=4))
+
+    plt.show()
+    pass
