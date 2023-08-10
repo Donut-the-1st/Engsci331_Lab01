@@ -1,7 +1,7 @@
 #![feature(iter_collect_into)]
 extern crate blas_src;
 
-use ndarray::{OwnedRepr, ViewRepr};
+use ndarray::{Zip, ViewRepr};
 use ndarray_linalg::Norm;
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
@@ -10,8 +10,9 @@ use numpy::*;
 use numpy::{IntoPyArray, PyArray};
 use pyo3::prelude::*;
 use ndarray::parallel::prelude::*;
+use rayon::prelude::*;
 
-
+/*
 fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) -> Array<f64, Ix1> {
     let mut vector_b : Vec<f64> = Vec::with_capacity(vector_x.len());
 
@@ -23,6 +24,16 @@ fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) ->
     let vector_b = Array::from_vec(vector_b);
     return vector_b
 }
+*/
+
+fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) -> Array<f64, Ix1> {
+    let mut vector_b= Array::zeros(vector_x.len());
+    Zip::from(&mut vector_b)
+        .and(array_a.rows())
+        .par_for_each(|product, row| {*product = row.dot(vector_x)});
+    return vector_b;
+}
+
 
 
 fn rs_argmax(vector: ArrayBase<ViewRepr<&f64>, Ix1>) -> usize {
@@ -54,18 +65,18 @@ fn power_sml_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix
     let mut eigenvector = Array::random(array_A.nrows(), Uniform::new(0.0, 1.0));
     let mut eigenvalue = 0.0;
     let mut old_eigenvalue = 0.0;
-    let mut t_vector: Array<f64, Ix1>;
     let mut is_converged = false;
     let mut argmax: usize = 0;
 
     while !is_converged {
-        t_vector = array_A.dot(&eigenvector);
-
+        /* store t vector in eignenvector */
+        eigenvector = array_A.dot(&eigenvector);
         /* find argmax */
-        argmax = rs_argmax(ArrayView::from(&t_vector));
-
-        eigenvalue = t_vector.norm_l2();
-        eigenvector = t_vector / eigenvalue;
+        /* with t vector == eigenvector */
+        argmax = rs_argmax(ArrayView::from(&eigenvector));
+        eigenvalue = eigenvector.norm_l2();
+        /* divide in place to convert t vector to eigenvector */
+        eigenvector /= eigenvalue;
         if (old_eigenvalue - eigenvalue).abs() / eigenvalue.abs() > tolerance {
             old_eigenvalue = eigenvalue;
         } else {
@@ -84,18 +95,18 @@ fn power_lrg_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix
     let mut eigenvector = Array::random(array_A.nrows(), Uniform::new(0.0, 1.0));
     let mut eigenvalue = 0.0;
     let mut old_eigenvalue = 0.0;
-    let mut t_vector: Array<f64, Ix1>;
     let mut is_converged = false;
     let mut argmax: usize = 0;
 
     while !is_converged {
-        t_vector = par_mat_vec_mul(&array_A, &eigenvector);
-
+        /* store t vector in eignenvector */
+        eigenvector = par_mat_vec_mul(&array_A, &eigenvector);
         /* find argmax */
-        argmax = rs_argmax(ArrayView::from(&t_vector));
-
-        eigenvalue = t_vector.norm_l2();
-        eigenvector = t_vector / eigenvalue;
+        /* with t vector == eigenvector */
+        argmax = rs_argmax(ArrayView::from(&eigenvector));
+        eigenvalue = eigenvector.norm_l2();
+        /* divide in place to convert t vector to eigenvector */
+        eigenvector /= eigenvalue;
         if (old_eigenvalue - eigenvalue).abs() / eigenvalue.abs() > tolerance {
             old_eigenvalue = eigenvalue;
         } else {
@@ -121,7 +132,7 @@ fn power<'a>(
     let mut eigenvalue: f64 = 0.0;
     let mut eigenvector: Array<f64, Ix1> = Array::zeros(array_A.nrows());
 
-    if eigenvector.len() < 200 {
+    if eigenvector.len() < 255 {
         (eigenvector, eigenvalue) = power_sml_mat(array_A, tolerance);
     } else {
         (eigenvector, eigenvalue) = power_lrg_mat(array_A, tolerance);

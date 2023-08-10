@@ -17,7 +17,7 @@ for i in range(34):
     print("Finished:", i, "Rust at", current_time)
 
 
-plt.title("Rust vs Numpy (Matmul Function)")
+plt.title("Rust vs Numpy (Power Function)")
 plt.xlabel("Matrix Size")
 plt.ylabel("Time")
 plt.plot(results[:, 0], results[:, 1], label="Numpy")
