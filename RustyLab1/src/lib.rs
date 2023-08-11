@@ -1,7 +1,8 @@
 #![feature(iter_collect_into)]
 extern crate blas_src;
 
-use ndarray::{Zip, ViewRepr};
+use ndarray::parallel::prelude::*;
+use ndarray::ViewRepr;
 use ndarray_linalg::Norm;
 use ndarray_rand::rand_distr::Uniform;
 use ndarray_rand::RandomExt;
@@ -9,23 +10,19 @@ use numpy::ndarray::prelude::*;
 use numpy::*;
 use numpy::{IntoPyArray, PyArray};
 use pyo3::prelude::*;
-use ndarray::parallel::prelude::*;
-use rayon::prelude::*;
+
+fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) -> Array<f64, Ix1> {
+    let mut vector_b = Array::zeros(vector_x.len());
+    let a_iter = array_a.axis_chunks_iter(Axis(0), 32);
+    let b_iter = vector_b.axis_chunks_iter_mut(Axis(0), 32);
+    let zipped = a_iter.into_par_iter().zip(b_iter);
+
+    zipped.for_each(|mut x| x.1.assign(&x.0.dot(vector_x)));
+
+    return vector_b;
+}
 
 /*
-fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) -> Array<f64, Ix1> {
-    let mut vector_b : Vec<f64> = Vec::with_capacity(vector_x.len());
-
-    array_a.axis_iter(Axis(0))
-        .into_par_iter()
-        .map(|row| row.dot(vector_x))
-        .collect_into_vec(&mut vector_b);
-
-    let vector_b = Array::from_vec(vector_b);
-    return vector_b
-}
-*/
-
 fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) -> Array<f64, Ix1> {
     let mut vector_b= Array::zeros(vector_x.len());
     Zip::from(&mut vector_b)
@@ -33,8 +30,14 @@ fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) ->
         .par_for_each(|product, row| {*product = row.dot(vector_x)});
     return vector_b;
 }
-
-
+*/
+fn deflate(array: &mut Array<f64, Ix2>, eigenvector: &Array<f64, Ix1>, eigenvalue: f64) {
+    let scaled_eigenvector = eigenvalue * eigenvector.clone();
+    array
+        .axis_iter_mut(Axis(0))
+        .zip(eigenvector.into_iter())
+        .for_each(|(mut a, b)| a.assign(&(&a - *b * &scaled_eigenvector)));
+}
 
 fn rs_argmax(vector: ArrayBase<ViewRepr<&f64>, Ix1>) -> usize {
     let mut argmax: usize = 0;
@@ -88,7 +91,7 @@ fn power_sml_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix
         eigenvalue = eigenvalue * -1.0;
     }
 
-    return (eigenvector, eigenvalue)
+    return (eigenvector, eigenvalue);
 }
 
 fn power_lrg_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix1>, f64) {
@@ -118,7 +121,7 @@ fn power_lrg_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix
         eigenvalue = eigenvalue * -1.0;
     }
 
-    return (eigenvector, eigenvalue)
+    return (eigenvector, eigenvalue);
 }
 
 /// Formats the sum of two numbers as string.

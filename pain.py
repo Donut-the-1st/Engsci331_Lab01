@@ -4,10 +4,12 @@ import timeit
 from matplotlib import pyplot as plt
 import datetime
 
-results = np.zeros((34, 3))
-results[:, 0] = np.linspace(2, 35, num=34) ** 2
+num_stuff = 39
+
+results = np.zeros((num_stuff, 3))
+results[:, 0] = np.linspace(2, num_stuff+1, num=num_stuff) ** 2
 tol = 1e-6
-for i in range(34):
+for i in range(num_stuff):
     A = np.random.random((int(results[i, 0]), int(results[i, 0])))
     results[i, 1] = timeit.timeit(lambda: power(A, tol), number=10000)
     current_time = datetime.datetime.now()
