@@ -1,4 +1,3 @@
-#![feature(iter_collect_into)]
 extern crate blas_src;
 
 use ndarray::parallel::prelude::*;
@@ -31,8 +30,8 @@ fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) ->
     return vector_b;
 }
 */
-fn deflate(array: &mut Array<f64, Ix2>, eigenvector: &Array<f64, Ix1>, eigenvalue: f64) {
-    let scaled_eigenvector = eigenvalue * eigenvector.clone();
+fn rs_deflate(array: &mut ArrayViewMut<f64, Ix2>, eigenvector: &ArrayView<f64, Ix1>, eigenvalue: f64) {
+    let scaled_eigenvector = eigenvalue * (eigenvector.clone().to_owned());
     array
         .axis_iter_mut(Axis(0))
         .zip(eigenvector.into_iter())
@@ -124,13 +123,13 @@ fn power_lrg_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix
     return (eigenvector, eigenvalue);
 }
 
-/// Formats the sum of two numbers as string.
+/// Power rule for 2D NumPy array, finds dominant eigenpair
 #[pyfunction]
-fn power<'a>(
-    py: Python<'a>,
+fn power<'py>(
+    py: Python<'py>,
     array_A: PyReadonlyArray2<f64>,
     tolerance: f64,
-) -> (&'a PyArray<f64, Ix1>, f64) {
+) -> (&'py PyArray<f64, Ix1>, f64) {
     let array_A = array_A.as_array();
     let mut eigenvalue: f64 = 0.0;
     let mut eigenvector: Array<f64, Ix1> = Array::zeros(array_A.nrows());
@@ -143,10 +142,20 @@ fn power<'a>(
 
     return (eigenvector.into_pyarray(py), eigenvalue);
 }
+/// deflates an Array, A inplace
+
+#[pyfunction]
+fn deflate<'py>(mut array: PyReadwriteArray2<f64>, eigenvector: PyReadonlyArray1<f64>, eigenvalue: f64) {
+    let mut array = array.as_array_mut();
+    let eigenvector = eigenvector.as_array();
+    rs_deflate(&mut array, &eigenvector, eigenvalue)
+}
+
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn RustyLab1(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(deflate, m)?)?;
     m.add_function(wrap_pyfunction!(power, m)?)?;
     m.add_function(wrap_pyfunction!(matmul, m)?)?;
     m.add_function(wrap_pyfunction!(argmax, m)?)?;
