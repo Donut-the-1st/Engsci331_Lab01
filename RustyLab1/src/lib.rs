@@ -21,15 +21,6 @@ fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) ->
     return vector_b;
 }
 
-/*
-fn par_mat_vec_mul(array_a: &ArrayView<f64, Ix2>, vector_x: &Array<f64, Ix1>) -> Array<f64, Ix1> {
-    let mut vector_b= Array::zeros(vector_x.len());
-    Zip::from(&mut vector_b)
-        .and(array_a.rows())
-        .par_for_each(|product, row| {*product = row.dot(vector_x)});
-    return vector_b;
-}
-*/
 fn rs_deflate(array: &mut ArrayViewMut<f64, Ix2>, eigenvector: &ArrayView<f64, Ix1>, eigenvalue: f64) {
     let scaled_eigenvector = eigenvalue * (eigenvector.clone().to_owned());
     array
@@ -48,6 +39,7 @@ fn rs_argmax(vector: ArrayBase<ViewRepr<&f64>, Ix1>) -> usize {
     return argmax;
 }
 
+///Finds the index of the absolute largest F64 in the array
 #[pyfunction]
 fn argmax(vector: PyReadonlyArray1<f64>) -> usize {
     let vector = vector.as_array();
@@ -123,6 +115,37 @@ fn power_lrg_mat(array_A: ArrayView<f64, Ix2>, tolerance: f64) -> (Array<f64, Ix
     return (eigenvector, eigenvalue);
 }
 
+fn rs_power(
+    array_A: ArrayView<f64, Ix2>,
+    tolerance: f64,
+) -> (Array<f64, Ix1>, f64) {
+    let mut eigenvalue: f64 = 0.0;
+    let mut eigenvector: Array<f64, Ix1> = Array::zeros(array_A.nrows());
+
+    if eigenvector.len() < 255 {
+        (eigenvector, eigenvalue) = power_sml_mat(array_A, tolerance);
+    } else {
+        (eigenvector, eigenvalue) = power_lrg_mat(array_A, tolerance);
+    }
+
+    return (eigenvector, eigenvalue);
+}
+
+#[pyfunction]
+fn power_w_deflate<'py>(py: Python<'py>, array_A: PyReadonlyArray2<f64>, tol: f64) -> Vec<(&'py PyArray<f64, Ix1>, f64)> {
+    let array_A = array_A.as_array();
+    let mut deflateable_A = array_A.into_owned();
+    array_A.nrows();
+    let mut eigenpairs: Vec::<(&'py PyArray<f64, Ix1>, f64)> = Vec::with_capacity(array_A.nrows());
+    for eigenpair in 0..array_A.nrows() {
+        let (eigenvector, eigenvalue) = rs_power(deflateable_A.view(), tol);
+        rs_deflate(&mut deflateable_A.view_mut(), &eigenvector.view(), eigenvalue);
+        eigenpairs.push((eigenvector.into_pyarray(py), eigenvalue));
+    }
+    return eigenpairs
+}
+
+
 /// Power rule for 2D NumPy array, finds dominant eigenpair
 #[pyfunction]
 fn power<'py>(
@@ -142,8 +165,8 @@ fn power<'py>(
 
     return (eigenvector.into_pyarray(py), eigenvalue);
 }
-/// deflates an Array, A inplace
 
+/// deflates an Array, A inplace
 #[pyfunction]
 fn deflate<'py>(mut array: PyReadwriteArray2<f64>, eigenvector: PyReadonlyArray1<f64>, eigenvalue: f64) {
     let mut array = array.as_array_mut();
@@ -159,5 +182,6 @@ fn RustyLab1(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(power, m)?)?;
     m.add_function(wrap_pyfunction!(matmul, m)?)?;
     m.add_function(wrap_pyfunction!(argmax, m)?)?;
+    m.add_function(wrap_pyfunction!(power_w_deflate, m)?)?;
     Ok(())
 }
