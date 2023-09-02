@@ -47,11 +47,11 @@ fn argmax(vector: PyReadonlyArray1<f64>) -> usize {
 }
 
 #[pyfunction]
-fn matmul<'a>(
-    py: Python<'a>,
+fn matmul<'py>(
+    py: Python<'py>,
     array_a: PyReadonlyArray2<f64>,
     array_b: PyReadonlyArray2<f64>,
-) -> &'a PyArray<f64, Ix2> {
+) -> &'py PyArray<f64, Ix2> {
     return (array_a.as_array().dot(&(array_b.as_array()))).into_pyarray(py);
 }
 
@@ -157,7 +157,7 @@ fn power<'py>(
     let mut eigenvalue: f64 = 0.0;
     let mut eigenvector: Array<f64, Ix1> = Array::zeros(array_A.nrows());
 
-    if eigenvector.len() < 255 {
+    if eigenvector.len() < 999999999 {
         (eigenvector, eigenvalue) = power_sml_mat(array_A, tolerance);
     } else {
         (eigenvector, eigenvalue) = power_lrg_mat(array_A, tolerance);
